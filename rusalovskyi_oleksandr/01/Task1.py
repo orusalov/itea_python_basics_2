@@ -127,12 +127,13 @@ while True:
           '\nBot_2 points: ' + str(bot_2_points) +
           '\n')
 
+    # Winner decision making
     if (user_points > MAXIMUM_POINTS_THRESHOLD and
         bot_1_points > MAXIMUM_POINTS_THRESHOLD and
         bot_2_points > MAXIMUM_POINTS_THRESHOLD):
 
         result = 'Everybody lost!'
-
+    
     elif (user_points <= MAXIMUM_POINTS_THRESHOLD and
              (bot_1_points > MAXIMUM_POINTS_THRESHOLD and
               bot_2_points > MAXIMUM_POINTS_THRESHOLD or
