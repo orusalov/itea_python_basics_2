@@ -36,6 +36,7 @@ def _count_words_(input_str, not_analizable_set):
     # lower and strip words 
     lowered_stripped_words = list(map(lambda w: w.strip('.').strip().lower(), words))
 
+    # filter words with not_analizable_set
     filtered_words = list(filter(lambda w: w not in not_analizable_set, lowered_stripped_words))
 
     # Initiate dict from keys of list with value 0
@@ -61,7 +62,7 @@ def _top_n_words_(dict_words_cnt, top_n):
 
 def _word_frequency_(dict_words_cnt):
 
-    # take count of all words
+    # try not modify incoming object:)
     result = dict_words_cnt.copy()
 
     # count words
