@@ -135,23 +135,6 @@ class Table:
 
     LETTERS = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
 
-    '''def __init__(self):
-        
-
-        self.SIZE_X = 8
-        self.SIZE_Y = 8
-
-        self.table = [[' ' for _ in range(self.SIZE_X)] for _ in range(self.SIZE_Y)]
-        self.user = [Checker([0, 0], 'x')]
-        self.bot = [Checker([2, 2], 'o')]
-
-    def get_checker_positions(self):
-        return [ch.position for ch in self.user + self.bot]
-
-    def remove_checker(self, checker):
-        self.user.remove(checker)
-        self.bot.remove(checker)'''
-
     def __init__(self, size):
 
         if size > len(self.LETTERS):
@@ -160,11 +143,15 @@ class Table:
         self.USER_COLOR = 'o'
         self.BOT_COLOR = 'x'
         self.EMPTY_COLOR = ' '
+        self.POSSIBLE_MOVES = [(1, -1), (1, 1)]
+        self.POSSIBLE_ATTACKS = [(2, -2), (2, 2)]
         self.current_turn = choice([self.USER_COLOR, self.BOT_COLOR])
         self.letters = self.LETTERS[:size]
         self.armies = {self.BOT_COLOR: self.generate_army(self.SIZE, self.BOT_COLOR), self.USER_COLOR: self.generate_army(self.SIZE, self.USER_COLOR)}
         self.get_start_cell = self._get_cell('checker', self.USER_COLOR)
         self.get_end_cell = self._get_cell('move to', self.EMPTY_COLOR)
+        self.checker_move_validator= self._move_validator(self.POSSIBLE_MOVES)
+        self.checker_attack_validator= self._move_validator(self.POSSIBLE_ATTACKS)
         self.warning_message = ''
         
         
@@ -190,7 +177,7 @@ class Table:
 
                 if not self.is_expected_cell_color(return_tuple, expected_cell_color):
                     if expected_cell_color == self.EMPTY_COLOR:
-                        print('Expected empty cell')
+                        print('Choose empty cell')
                     else:
                         print('You should take your checker')
 
@@ -199,6 +186,24 @@ class Table:
                 return return_tuple
 
         return return_function
+
+    def _move_validator(self, valid_moves):
+
+        def return_func(st_pos, end_pos):
+            end_pos = self.is_inside_table(end_pos)
+
+            if not end_pos:
+                return False
+
+            relative_change = tuple(map(lambda n, m: n - m, end_pos, st_pos))
+
+            if (relative_change not in valid_moves or
+                (not self.is_expected_cell_color(end_pos, self.EMPTY_COLOR))):
+                return False
+
+            return (st_pos, end_pos)
+
+        return return_func
 
     def generate_army(self, size, color):
 
@@ -225,9 +230,12 @@ class Table:
                 self.deck[x][y] = checker
 
             self.reverse_deck()
+        
+
+    def print_deck(self):
 
         horizon = '   '+' '.join(self.letters)
-
+        
         print(f'{horizon}')
         for row in reversed(list(enumerate(self.deck))):
             print(f'{row[0] + 1} |{"|".join(list([str(symb) for symb in row[1]]))}| {row[0] + 1}')
@@ -240,7 +248,7 @@ class Table:
     def move_checker(self, st_pos, end_pos):
         self.deck[st_pos[0]][st_pos[1]].position = end_pos
         
-    def is_valid_position(self, position):
+    def is_inside_table(self, position):
 
         if (position[0] < 0 or
             position[1] < 0 or
@@ -250,23 +258,17 @@ class Table:
 
         return position
 
-    def move_validator(self, st_pos, end_pos):
+    def possible_checker_moves(self, position):
 
-        POSSIBLE_MOVES = [(1, -1), (1, 1)]
-        end_pos = self.is_valid_position(end_pos)
+        possible_moves = []
+        for possible_relative_move in self.POSSIBLE_MOVES:
+            possible_end_position = list(map(lambda n, m: n + m, position, possible_relative_move))
 
-        if not end_pos:
+            move = self.checker_move_validator(position, possible_end_position)
+            if move:
+                possible_moves.append(move)
 
-            self.warning_message = 'Wrong move!'
-            return False
-
-        relative_change = tuple(map(lambda n, m: n - m, end_pos, st_pos))
-
-        if relative_change not in POSSIBLE_MOVES:
-            self.warning_message = 'Wrong move!'
-            return False
-
-        return (st_pos, end_pos)
+        return possible_moves
 
     def is_expected_cell_color(self, position, expected_cell_color):
 
@@ -278,20 +280,77 @@ class Table:
             return True
         else:
             return False
+
+    def possible_turn_moves(self, turn_color):
+
+        result = []
+        for checker in self.armies[turn_color]:
+            
+            possible_ch_moves = self.possible_checker_moves(checker.position)
+            if possible_ch_moves:
+                result.append(possible_ch_moves)
+
+        return result
+
+    def bot_turn(self):
+
+        print(self.possible_turn_moves(self.BOT_COLOR))
+        bot_move = choice(choice(self.possible_turn_moves(self.BOT_COLOR)))
+        self.move_checker(*bot_move)
+        print(bot_move)
+
+    def check_close_checker(self, position):
+
+        possible_moves = []
+        for possible_relative_move in self.POSSIBLE_MOVES:
+            possible_end_position = list(map(lambda n, m: n + m, position, possible_relative_move))
+
+            move = self.checker_move_validator(position, possible_end_position)
+            if move:
+                possible_moves.append(move)
+
+        return possible_moves
+
+    def possible_checker_attack(self, position):
+
+        possible_moves = []
+        for possible_relative_move in self.POSSIBLE_ATTACKS:
+
+            possible_end_position = list(map(lambda n, m: n + m, position, possible_relative_move))
+            move = self.checker_attack_validator(position, possible_end_position)
+            if move:
+                possible_moves.append(move)
+
+        return possible_moves
+
+    def user_move(self):
         
+        while True:
+
+            self.generate_deck()
+            self.print_deck()
+
+            position_change = self.checker_move_validator(self.get_start_cell(), self.get_end_cell())
+
+            if not position_change:
+                self.warning_message = 'Wrong move!'
+                continue
+            self.move_checker(*position_change)
+
+            break
 
 
 table = Table(8)
 
 while True:
+    try:
+        table.user_move()
 
-    table.generate_deck()
-
-    position_change = table.move_validator(table.get_start_cell(), table.get_end_cell())
-
-    if not position_change:
-        continue
-
-    table.move_checker(*position_change)
-
+        table.generate_deck()
+        table.reverse_deck()
+        table.bot_turn()
+        table.reverse_deck()
         
+    except KeyboardInterrupt:
+        print('Goodbye!')
+        break
