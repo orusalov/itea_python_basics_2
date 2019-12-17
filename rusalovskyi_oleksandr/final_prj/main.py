@@ -3,7 +3,8 @@ from checkers import Table
 
 def main():
 
-    table = Table(8)
+    table_size = int(input('Input checkers table size: ').strip())
+    table = Table(table_size)
 
     while True:
         try:
