@@ -128,6 +128,15 @@ class Checker:
 
         return self.color
 
+    '''def __hash__(self):
+        return hash(tuple(self.position))+hash(self.color)
+
+    def __eq__(self, other):
+        if isinstance(other, Checker) and self.position == other.position and self.color == other.color:
+            return True
+        else:
+            return False'''
+
 
 
 
@@ -147,13 +156,20 @@ class Table:
         self.POSSIBLE_ATTACKS = [(2, -2), (2, 2)]
         self.current_turn = choice([self.USER_COLOR, self.BOT_COLOR])
         self.letters = self.LETTERS[:size]
-        self.armies = {self.BOT_COLOR: self.generate_army(self.SIZE, self.BOT_COLOR), self.USER_COLOR: self.generate_army(self.SIZE, self.USER_COLOR)}
+        self.armies = {self.BOT_COLOR: self._generate_army(self.SIZE, self.BOT_COLOR), self.USER_COLOR: self._generate_army(self.SIZE, self.USER_COLOR)}
         self.get_start_cell = self._get_cell('checker', self.USER_COLOR)
         self.get_end_cell = self._get_cell('move to', self.EMPTY_COLOR)
-        self.checker_move_validator= self._move_validator(self.POSSIBLE_MOVES)
-        self.checker_attack_validator= self._move_validator(self.POSSIBLE_ATTACKS)
+        self.possible_checker_regular_moves = self._get_interested_positions_by_relative_change_and_color(self.POSSIBLE_MOVES, self.EMPTY_COLOR)
+        self.possible_checker_attack_moves = self._get_interested_positions_by_relative_change_and_color(self.POSSIBLE_ATTACKS, self.EMPTY_COLOR)
         self.warning_message = ''
-        
+    
+
+    def _generate_army(self, size, color):
+
+        n = int((size - 2) / 2)
+        army = [Checker([i, j], color) for i in range(n) for j in range(i % 2, size, 2)]
+
+        return army   
         
     def _get_cell(self, type_, expected_cell_color):
 
@@ -187,30 +203,36 @@ class Table:
 
         return return_function
 
-    def _move_validator(self, valid_moves):
+    def _get_interested_positions_by_relative_change_and_color(self, interested_moves, interested_color):
+    
+        def return_func(checker):
 
-        def return_func(st_pos, end_pos):
-            end_pos = self.is_inside_table(end_pos)
+            position = checker.position
+            result_positions = []
+            for relative_change in interested_moves:
+                interested_position = tuple(map(lambda n, m: n + m, position, relative_change))
 
-            if not end_pos:
-                return False
+                if self.is_inside_table(interested_position) and self.is_expected_cell_color(interested_position, interested_color):
+                    result_positions.append(interested_position)
 
-            relative_change = tuple(map(lambda n, m: n - m, end_pos, st_pos))
-
-            if (relative_change not in valid_moves or
-                (not self.is_expected_cell_color(end_pos, self.EMPTY_COLOR))):
-                return False
-
-            return (st_pos, end_pos)
+            return result_positions
 
         return return_func
 
-    def generate_army(self, size, color):
+    def nearby_enemies(self, checker):
+        return self._get_interested_positions_by_relative_change_and_color(self.POSSIBLE_MOVES, self.get_enemy_color())(checker)
 
-        n = int((size - 2) / 2)
-        army = [Checker([i, j], color) for i in range(n) for j in range(i % 2, size, 2)]
+    def get_enemy_color(self):
 
-        return army
+        if self.USER_COLOR == self.current_turn:
+            return self.BOT_COLOR
+        elif self.BOT_COLOR == self.current_turn:
+            return self.USER_COLOR
+        else:
+            return False
+
+    def captured_deck_object(self, position):
+        return self.deck[position[0]][position[1]]
 
     def reverse_deck(self):
         for row in self.deck:
@@ -245,8 +267,17 @@ class Table:
         print(self.warning_message)
         self.warning_message = ''
 
-    def move_checker(self, st_pos, end_pos):
-        self.deck[st_pos[0]][st_pos[1]].position = end_pos
+    def move_checker(self, checker, end_pos):
+        checker.position = end_pos
+
+    def attack(self, checker, beaten_checker_and_move):
+
+        if beaten_checker_and_move[0] in self.armies[self.USER_COLOR]:
+            self.armies[self.USER_COLOR].remove(beaten_checker_and_move[0])
+        elif beaten_checker_and_move[0] in self.armies[self.BOT_COLOR]:
+            self.armies[self.BOT_COLOR].remove(beaten_checker_and_move[0])
+
+        self.move_checker(checker, beaten_checker_and_move[1])
         
     def is_inside_table(self, position):
 
@@ -257,18 +288,6 @@ class Table:
             return False
 
         return position
-
-    def possible_checker_moves(self, position):
-
-        possible_moves = []
-        for possible_relative_move in self.POSSIBLE_MOVES:
-            possible_end_position = list(map(lambda n, m: n + m, position, possible_relative_move))
-
-            move = self.checker_move_validator(position, possible_end_position)
-            if move:
-                possible_moves.append(move)
-
-        return possible_moves
 
     def is_expected_cell_color(self, position, expected_cell_color):
 
@@ -283,59 +302,98 @@ class Table:
 
     def possible_turn_moves(self, turn_color):
 
-        result = []
+        result = {}
         for checker in self.armies[turn_color]:
             
-            possible_ch_moves = self.possible_checker_moves(checker.position)
+            possible_ch_moves = self.possible_checker_regular_moves(checker)
             if possible_ch_moves:
-                result.append(possible_ch_moves)
+                result[checker] = possible_ch_moves
+
+        return result
+
+    def possible_turn_attacks(self, turn_color):
+
+        result = {}
+        for checker in self.armies[turn_color]:
+            
+            possible_ch_atacks = self.possible_checker_attack(checker)
+            if possible_ch_atacks:
+                result[checker] = possible_ch_atacks
 
         return result
 
     def bot_turn(self):
 
-        print(self.possible_turn_moves(self.BOT_COLOR))
-        bot_move = choice(choice(self.possible_turn_moves(self.BOT_COLOR)))
-        self.move_checker(*bot_move)
-        print(bot_move)
+        turn = self.move_checker
 
-    def check_close_checker(self, position):
+        checkers_and_attacks = self.possible_turn_attacks(self.BOT_COLOR)
+        if checkers_and_attacks:
+            checkers_and_moves = checkers_and_attacks
+            turn = self.attack
+        else:
+            checkers_and_moves = self.possible_turn_moves(self.BOT_COLOR)
+            
+        bot_checker = choice(list(checkers_and_moves.keys()))
+        bot_move = choice(checkers_and_moves[bot_checker])
+        turn(bot_checker, bot_move)
 
-        possible_moves = []
-        for possible_relative_move in self.POSSIBLE_MOVES:
-            possible_end_position = list(map(lambda n, m: n + m, position, possible_relative_move))
+    def possible_checker_attack(self, checker):
 
-            move = self.checker_move_validator(position, possible_end_position)
+        near_enemies = self.nearby_enemies(checker)
+        attack_moves = set(self.possible_checker_attack_moves(checker))
+        return_moves = []
+        for enemie_position in near_enemies:
+
+            relative_attack_direction = list(map(lambda n, m: 2 * (n - m), enemie_position, checker.position))
+            attack_position = set()
+            attack_position.add(tuple(map(lambda n, m: n + m, checker.position, relative_attack_direction)))
+
+            move = attack_moves & attack_position
             if move:
-                possible_moves.append(move)
+                return_move = (self.captured_deck_object(enemie_position), tuple(move)[0])
+                return_moves.append(return_move)
 
-        return possible_moves
+        return return_moves
 
-    def possible_checker_attack(self, position):
-
-        possible_moves = []
-        for possible_relative_move in self.POSSIBLE_ATTACKS:
-
-            possible_end_position = list(map(lambda n, m: n + m, position, possible_relative_move))
-            move = self.checker_attack_validator(position, possible_end_position)
-            if move:
-                possible_moves.append(move)
-
-        return possible_moves
-
-    def user_move(self):
+    def user_turn(self):
         
         while True:
 
             self.generate_deck()
             self.print_deck()
 
-            position_change = self.checker_move_validator(self.get_start_cell(), self.get_end_cell())
+            turn = self.move_checker
+            
+            checkers_and_attacks = self.possible_turn_attacks(self.USER_COLOR)
+            if checkers_and_attacks:
+                possible_checkers_and_moves = checkers_and_attacks
+                turn = self.attack
+            else:
+                possible_checkers_and_moves = self.possible_turn_moves(self.USER_COLOR)
+                
+            checker = self.captured_deck_object(self.get_start_cell())
 
-            if not position_change:
+            if checker not in possible_checkers_and_moves.keys():
+                self.warning_message = 'This checker can''t make a move!'
+                continue
+            
+            user_move = self.get_end_cell()
+
+            print(possible_checkers_and_moves[checker])#######################
+            print(user_move)##################################################
+            if not turn == self.move_checker:
+                print(turn == self.attack, user_move not in possible_checkers_and_moves[checker][0][1])##################################################
+            if ((turn == self.move_checker and user_move not in possible_checkers_and_moves[checker]) or
+                (turn == self.attack and user_move not in possible_checkers_and_moves[checker][0][1])):
                 self.warning_message = 'Wrong move!'
                 continue
-            self.move_checker(*position_change)
+
+            if turn == self.attack:
+                user_move = possible_checkers_and_moves[checker][0][1]
+                
+            print(user_move)##################################################
+
+            turn(checker, user_move)
 
             break
 
@@ -344,12 +402,17 @@ table = Table(8)
 
 while True:
     try:
-        table.user_move()
+        if table.current_turn == table.USER_COLOR:
+            table.user_turn()
 
+            table.current_turn = table.get_enemy_color()
+            
         table.generate_deck()
         table.reverse_deck()
         table.bot_turn()
         table.reverse_deck()
+        
+        table.current_turn = table.get_enemy_color()
         
     except KeyboardInterrupt:
         print('Goodbye!')
