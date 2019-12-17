@@ -341,6 +341,10 @@ class Table:
         :rtype: tuple
         """
         checker.position = end_pos
+
+        if end_pos[0] + 1 == self.SIZE:
+            checker.color = checker.color.upper()
+
         return end_pos
 
     def attack(self, checker, beaten_checker_and_move):
@@ -449,6 +453,9 @@ class Table:
                     enemy_checker = checkers_and_attacks[checker][user_move]
                     user_move = {user_move: enemy_checker}
                     self.attack(checker, user_move)
+
+                    self.generate_deck()
+                    self.print_deck()
 
                     checkers_and_attacks = self.possible_turn_attacks(self.USER_COLOR)
                 
