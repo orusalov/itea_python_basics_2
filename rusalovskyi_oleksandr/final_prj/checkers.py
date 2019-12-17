@@ -12,6 +12,7 @@ class Checker:
 
         self.position = position
         self.color = color
+        self.is_king = False
         
     def __str__(self):
         return self.color
@@ -60,6 +61,7 @@ class Table:
         self.EMPTY_COLOR = ' '
         self.POSSIBLE_MOVES = [(1, -1), (1, 1)]
         self.POSSIBLE_ATTACKS = [(2, -2), (2, 2)]
+        self.POSSIBLE_KING_MOVES = [(i, i) for i in range(1,self.SIZE)] + [(i, -i) for i in range(1,self.SIZE)] + [(-i, i) for i in range(1,self.SIZE)] + [(-i, -i) for i in range(1,self.SIZE)]
 
         # take only SIZE letters
         self.letters = self.LETTERS[:self.SIZE]
@@ -77,9 +79,9 @@ class Table:
         self.get_end_cell = self._get_cell('move to', self.EMPTY_COLOR)
 
         # possible checker moves
-        self.possible_checker_regular_moves = self._get_positions_by_relative_change_and_color(self.POSSIBLE_MOVES, self.EMPTY_COLOR)
-        self.possible_checker_attack_moves = self._get_positions_by_relative_change_and_color(self.POSSIBLE_ATTACKS, self.EMPTY_COLOR)
-
+        #self.possible_checker_regular_moves = self._get_positions_by_relative_change_and_color(self.POSSIBLE_MOVES, self.EMPTY_COLOR)
+        #self.possible_checker_attack_moves = self._get_positions_by_relative_change_and_color(self.POSSIBLE_ATTACKS, self.EMPTY_COLOR)
+        
         # POSSIBLE TURN MOVES AND ATTACKS
         self.possible_turn_moves = self._possible_turn(self.possible_checker_regular_moves)
         self.possible_turn_attacks = self._possible_turn(self.possible_checker_attack)
@@ -152,6 +154,7 @@ class Table:
 
             position = checker.position
             result_positions = []
+            
             for relative_change in interested_moves:
                 interested_position = tuple(map(lambda n, m: n + m, position, relative_change))
 
@@ -196,6 +199,19 @@ class Table:
         :rtype: list
         """
         return self._get_positions_by_relative_change_and_color(self.POSSIBLE_MOVES, self.get_enemy_color())(checker)
+
+    def possible_checker_regular_moves(self, checker):
+        interested_moves = self.POSSIBLE_MOVES
+        if checker.is_king:
+            interested_moves = self.POSSIBLE_KING_MOVES
+
+        return self._get_positions_by_relative_change_and_color(interested_moves, self.EMPTY_COLOR)(checker)
+
+    def possible_checker_attack_moves(self,checker):
+        interested_moves = self.POSSIBLE_ATTACKS
+        if checker.is_king:
+            interested_moves = self.POSSIBLE_KING_MOVES
+        return self._get_positions_by_relative_change_and_color(interested_moves, self.EMPTY_COLOR)(checker)
 
     def get_enemy_color(self):
         """
@@ -293,7 +309,7 @@ class Table:
         """
         obj = self.deck[position[0]][position[1]]
 
-        if isinstance(obj, Checker) and obj.color == expected_cell_color:
+        if isinstance(obj, Checker) and obj.color.lower() == expected_cell_color:
             return True
         elif obj == expected_cell_color:
             return True
@@ -317,7 +333,8 @@ class Table:
         return_moves = {}
         for enemie_position in near_enemies:
 
-            relative_attack_direction = list(map(lambda n, m: 2 * (n - m), enemie_position, checker.position))
+                                                            # look one cell far from enemie
+            relative_attack_direction = list(map(lambda n, m: ((n - m) + int((n - m) / abs(n - m))), enemie_position, checker.position))
             attack_position = set()
             attack_position.add(tuple(map(lambda n, m: n + m, checker.position, relative_attack_direction)))
 
@@ -344,6 +361,7 @@ class Table:
 
         if end_pos[0] + 1 == self.SIZE:
             checker.color = checker.color.upper()
+            checker.is_king = True
 
         return end_pos
 
